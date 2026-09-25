@@ -1,6 +1,7 @@
 "use strict";
 const element = (id) => document.getElementById(id);
 let token = "", sources = [], cursor = null, requestVersion = 0;
+const receipts = new Map();
 const number = (value) => value == null ? "—" : value.toLocaleString();
 function node(tag, text, className) {
   const result = document.createElement(tag);
@@ -20,13 +21,23 @@ function table(target, headings, rows) {
 function render() {
   const snapshot = sources.find((source) => source.source_id === element("source").value);
   if (!snapshot) {
-    for (const id of ["metrics", "chart", "workflows", "days", "coverage", "window"]) element(id).replaceChildren();
+    for (const id of ["metrics", "chart", "workflows", "days", "coverage", "window", "measurement", "measurement-detail"]) element(id).replaceChildren();
     return;
   }
   const usage = snapshot.usage, savings = snapshot.savings;
-  element("window").textContent = `${snapshot.days} UTC calendar days · generated ${snapshot.generated_at} · sequence ${snapshot.sequence} · retained local runs`;
+  const measurement = snapshot.measurements;
+  const measureCards = measurement ? [
+    ["Measured execution tokens", number(measurement.measured_agent_tokens), `${measurement.measured_tasks} of ${measurement.observed_tasks} attributed tasks measured; ${measurement.unattributed_tasks} unattributed`],
+    ["Estimated context reduction", number(measurement.estimated_context_reference_tokens), `Reference tokens, first exposure only. Bytes reduced: ${number(measurement.context_bytes_reduced)}`],
+    ["Estimated operational savings", number(measurement.estimated_operational_savings), "Compared with compatible recorded manual tasks; can be negative"],
+    ["Estimated net savings", number(measurement.estimated_net_savings), "Includes creation and maintenance only when coverage is declared complete"]
+  ] : [["Agent measurements", "—", "Not shared or not collected; workflow runtime does not establish token savings"]];
+  element("measurement").replaceChildren(...measureCards.map(([title, value, note]) => { const card = node("article", null, "card"); card.append(node("h2", title), node("strong", value), node("p", note)); return card; }));
+  element("measurement-window").textContent = measurement ? `Retained imported tasks (separate from the calendar window below) · latest observation ${measurement.latest_observation_at || "unknown"}. Historical comparison, not a guaranteed minimum.` : "Enable local measurement and explicitly share it in a v2 export.";
+  table(element("measurement-detail"), ["Workflow", "Host / model", "Workload", "Quality", "Samples", "Manual token range", "Measured / observed tasks", "Operational estimate", "Net estimate", "Missing evidence / assumptions"], (measurement?.workflows || []).map(row => [row.workflow_ref, row.host_models.join(", "), row.workloads.join(", "), row.quality, number(row.baseline_samples), `${number(row.baseline_min_tokens)} – ${number(row.baseline_max_tokens)}`, `${row.measured_tasks} / ${row.observed_tasks}`, number(row.estimated_operational_savings), number(row.estimated_net_savings), row.issues.join(", ")]));
+  element("window").textContent = `${snapshot.days} UTC calendar days · generated ${snapshot.generated_at} · sequence ${snapshot.sequence} · received ${receipts.get(snapshot.source_id) || "unknown"} · retained local runs`;
   const metrics = [
-    ["Estimated net tokens saved", number(savings?.net_tokens_saved), savings ? "After setup and failed attempts" : "Savings not shared or not configured"],
+    ["Configured-baseline estimate", number(savings?.net_tokens_saved), savings ? "Legacy estimate; not measured provider savings" : "No configured baseline estimate"],
     ["Workflow executions", number(usage.runs), `${usage.running} running · ${usage.execution_errors} execution errors`],
     ["Verified tasks", number(usage.verified), "Includes valid negative findings"],
     ["Workflow runtime", `${(usage.duration_ms / 1000).toLocaleString()}s`, "Machine runtime, not time saved"]
@@ -45,17 +56,19 @@ async function load(append = false) {
   const version = ++requestVersion, selected = element("source").value;
   element("status").textContent = "Loading metrics…";
   try {
-    const response = await fetch(`/api/v1/sources${append && cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, {headers: {Authorization: `Bearer ${token}`}, cache: "no-store"});
+    const response = await fetch(`/api/v2/sources${append && cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, {headers: {Authorization: `Bearer ${token}`}, cache: "no-store"});
     if (!response.ok) throw new Error(response.status === 401 ? "Read token rejected. Disconnect and try a valid read token." : "Could not load metrics. Check the receiver.");
     const data = await response.json();
     if (version !== requestVersion) return;
+    if (!append) receipts.clear();
+    for (const item of data.receipts || []) receipts.set(item.source_id, item.received_at);
     const merged = new Map((append ? sources : []).map(source => [source.source_id, source]));
     for (const source of data.sources) merged.set(source.source_id, source);
     sources = [...merged.values()]; cursor = data.next_cursor || null;
-    element("source").replaceChildren(...sources.map(source => { const option = node("option", source.source_id); option.value = source.source_id; return option; }));
+    element("source").replaceChildren(...sources.map(source => { const option = node("option", source.source_label || `Unnamed source · ${source.source_id.slice(0, 8)}`); option.title = source.source_id; option.value = source.source_id; return option; }));
     if (sources.some(source => source.source_id === selected)) element("source").value = selected;
     element("login").hidden = true; element("dashboard").hidden = false; element("more").hidden = !cursor;
-    element("status").textContent = sources.length ? `${sources.length} sources loaded. Select one to inspect its latest snapshot.` : "Connected. No snapshots received yet. Configure Owlmatic, then run owlmatic export push.";
+    element("status").textContent = sources.length ? `${sources.length} sources loaded. Select one to inspect its latest exported snapshot. Refresh does not upload new local runs.` : "Connected. No snapshots received yet. Configure Owlmatic, then run owlmatic export push.";
     render();
   } catch (error) { if (version === requestVersion) element("status").textContent = error.message; }
 }
@@ -63,4 +76,4 @@ element("connect").addEventListener("submit", event => { event.preventDefault();
 element("source").addEventListener("change", render);
 element("refresh").addEventListener("click", () => load());
 element("more").addEventListener("click", () => load(true));
-element("disconnect").addEventListener("click", () => { requestVersion++; token = ""; sources = []; cursor = null; element("dashboard").hidden = true; element("login").hidden = false; element("metrics").replaceChildren(); element("chart").replaceChildren(); element("workflows").replaceChildren(); element("days").replaceChildren(); element("source").replaceChildren(); element("coverage").textContent = ""; element("window").textContent = ""; element("status").textContent = "Disconnected."; });
+element("disconnect").addEventListener("click", () => { requestVersion++; token = ""; sources = []; cursor = null; receipts.clear(); element("dashboard").hidden = true; element("login").hidden = false; element("metrics").replaceChildren(); element("chart").replaceChildren(); element("workflows").replaceChildren(); element("days").replaceChildren(); element("source").replaceChildren(); element("coverage").textContent = ""; element("window").textContent = ""; element("measurement").replaceChildren(); element("measurement-detail").replaceChildren(); element("measurement-window").textContent = ""; element("status").textContent = "Disconnected."; });

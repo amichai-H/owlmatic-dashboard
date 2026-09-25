@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from .wire import Contract, StatisticsSnapshot
+from .wire import Contract, Snapshot, StatisticsSnapshot
 
 
 class Receipt(Contract):
@@ -10,7 +10,18 @@ class Receipt(Contract):
     snapshot_id: str
 
 
+class SourceReceipt(Contract):
+    source_id: str
+    received_at: str | None
+
+
 class SourcePage(Contract):
+    sources: tuple[Snapshot, ...]
+    receipts: tuple[SourceReceipt, ...] = ()
+    next_cursor: str | None = None
+
+
+class LegacySourcePage(Contract):
     sources: tuple[StatisticsSnapshot, ...]
     next_cursor: str | None = None
 

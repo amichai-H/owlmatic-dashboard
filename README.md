@@ -58,3 +58,9 @@ python -m build
 The `wire.py` types are the vendored v1 public contract, not an application dependency. Contract changes require coordinated schema/fixture updates and a new schema version for breaking changes. Tests cover authentication separation, bounded input, idempotency, conflicts, out-of-order delivery, restart persistence, pagination, and architecture boundaries.
 
 Apache-2.0. This is an initial alpha; review the limitations before enterprise deployment.
+
+## Measurement snapshots (v2)
+
+This receiver accepts v1 at `/api/v1/snapshots` and v2 at `/api/v2/snapshots`. The dashboard uses `/api/v2/sources`; the legacy `/api/v1/sources` response remains compatible and omits measurement data. V1 records migrate without invented receipt times. V2 provides configured source labels, receipt freshness, measured execution tokens, historical operational comparisons, context estimates, and net estimates when cost coverage is complete. Negative estimates remain negative; absent values remain unknown. Legacy configured estimates are labeled separately.
+
+The [published v2 schema](contracts/statistics-snapshot-v2.schema.json) is vendored and does not depend on the Owlmatic package. Upgrade this receiver before configuring v2 senders. Measurement history covers retained tasks, separate from the run statistics calendar window. The browser Refresh button fetches already exported snapshots; it does not invoke agents or upload local runs. No raw prompts, histories, logs, or credentials belong in snapshots.

@@ -4,7 +4,7 @@ import asyncio
 import re
 from importlib.resources import files
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -13,7 +13,7 @@ from starlette.routing import Route
 from .domain import ReceiverError
 from .security import Credentials
 from .service import ReceiverService
-from .wire import StatisticsSnapshot
+from .wire import Snapshot
 
 MAX_BODY_BYTES = 1048576
 HEADERS = {
@@ -40,9 +40,11 @@ def create_app(service: ReceiverService, credentials: Credentials) -> Starlette:
                 return error("PAYLOAD_TOO_LARGE", 413)
             data.extend(chunk)
         try:
-            snapshot = StatisticsSnapshot.model_validate_json(bytes(data))
+            snapshot: Snapshot = TypeAdapter(Snapshot).validate_json(bytes(data))
         except ValidationError:
             return error("INVALID_SNAPSHOT", 400)
+        if snapshot.schema_version == "2" and request.url.path == "/api/v1/snapshots":
+            return error("V2_ENDPOINT_REQUIRED", 400)
         if request.headers.get("idempotency-key") != snapshot.snapshot_id:
             return error("IDEMPOTENCY_KEY_REQUIRED", 400)
         receipt = await asyncio.to_thread(service.ingest, snapshot)
@@ -54,9 +56,14 @@ def create_app(service: ReceiverService, credentials: Credentials) -> Starlette:
         cursor = request.query_params.get("cursor")
         if cursor is not None and not re.fullmatch(r"[0-9a-f]{32}", cursor):
             return error("INVALID_CURSOR", 400)
-        page = await asyncio.to_thread(service.sources, cursor)
+        if request.url.path == "/api/v1/sources":
+            page = await asyncio.to_thread(service.legacy_sources, cursor)
+            return Response(
+                page.model_dump_json(exclude_none=True), media_type="application/json", headers=HEADERS
+            )
+        page_v2 = await asyncio.to_thread(service.sources, cursor)
         return Response(
-            page.model_dump_json(exclude_none=True), media_type="application/json", headers=HEADERS
+            page_v2.model_dump_json(exclude_none=True), media_type="application/json", headers=HEADERS
         )
 
     async def asset(request: Request) -> Response:
@@ -76,7 +83,9 @@ def create_app(service: ReceiverService, credentials: Credentials) -> Starlette:
         debug=False,
         routes=[
             Route("/api/v1/snapshots", ingest, methods=["POST"]),
+            Route("/api/v2/snapshots", ingest, methods=["POST"]),
             Route("/api/v1/sources", sources),
+            Route("/api/v2/sources", sources),
             Route("/", asset),
             Route("/assets/{name}", asset),
         ],

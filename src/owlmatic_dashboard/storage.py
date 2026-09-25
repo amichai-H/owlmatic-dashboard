@@ -4,11 +4,14 @@ import hashlib
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
-from .domain import Receipt, ReceiverError, SourcePage
-from .wire import StatisticsSnapshot
+from pydantic import TypeAdapter
+
+from .domain import Receipt, ReceiverError, SourcePage, SourceReceipt
+from .wire import Snapshot
 
 
 class SqliteSnapshots:
@@ -19,13 +22,16 @@ class SqliteSnapshots:
         with self.connect() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.execute("BEGIN IMMEDIATE")
-            if db.execute("PRAGMA user_version").fetchone()[0] not in {0, 1}:
+            version = db.execute("PRAGMA user_version").fetchone()[0]
+            if version not in {0, 1, 2}:
                 raise ReceiverError("DATABASE_VERSION", 503)
             db.execute(
                 "CREATE TABLE IF NOT EXISTS sources(id TEXT PRIMARY KEY,sequence INTEGER NOT NULL,body TEXT NOT NULL)"
             )
             db.execute("CREATE TABLE IF NOT EXISTS receipts(id TEXT PRIMARY KEY,digest TEXT NOT NULL)")
-            db.execute("PRAGMA user_version=1")
+            if version < 2:
+                db.execute("ALTER TABLE sources ADD COLUMN received_at TEXT")
+            db.execute("PRAGMA user_version=2")
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
@@ -43,7 +49,7 @@ class SqliteSnapshots:
         finally:
             db.close()
 
-    def accept(self, snapshot: StatisticsSnapshot) -> Receipt:
+    def accept(self, snapshot: Snapshot) -> Receipt:
         body = snapshot.model_dump_json(exclude_none=True)
         digest = hashlib.sha256(body.encode()).hexdigest()
         with self.connect() as db:
@@ -62,17 +68,19 @@ class SqliteSnapshots:
             if current and current[0] > snapshot.sequence:
                 return Receipt(status="stale", snapshot_id=snapshot.snapshot_id)
             db.execute(
-                "INSERT INTO sources(id,sequence,body) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET sequence=excluded.sequence,body=excluded.body",
-                (snapshot.source_id, snapshot.sequence, body),
+                "INSERT INTO sources(id,sequence,body,received_at) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET sequence=excluded.sequence,body=excluded.body,received_at=excluded.received_at",
+                (snapshot.source_id, snapshot.sequence, body, datetime.now(UTC).isoformat()),
             )
         return Receipt(status="accepted", snapshot_id=snapshot.snapshot_id)
 
     def page(self, cursor: str | None, limit: int) -> SourcePage:
         with self.connect() as db:
             rows = db.execute(
-                "SELECT id,body FROM sources WHERE id>? ORDER BY id LIMIT ?", (cursor or "", limit + 1)
+                "SELECT id,body,received_at FROM sources WHERE id>? ORDER BY id LIMIT ?",
+                (cursor or "", limit + 1),
             ).fetchall()
         return SourcePage(
-            sources=tuple(StatisticsSnapshot.model_validate_json(cast(str, row[1])) for row in rows[:limit]),
+            sources=tuple(TypeAdapter(Snapshot).validate_json(cast(str, row[1])) for row in rows[:limit]),
+            receipts=tuple(SourceReceipt(source_id=row[0], received_at=row[2]) for row in rows[:limit]),
             next_cursor=cast(str, rows[limit - 1][0]) if len(rows) > limit else None,
         )
