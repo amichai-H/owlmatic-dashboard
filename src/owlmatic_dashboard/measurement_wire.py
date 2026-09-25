@@ -19,16 +19,16 @@ class Assessment(Contract):
     baseline_max_tokens: int | None = None
     host_models: tuple[str, ...] = ()
     workloads: tuple[str, ...] = ()
-    measured_agent_tokens: int | None
-    estimated_operational_savings: int | None
-    estimated_net_savings: int | None
-    estimated_context_reference_tokens: int | None
-    context_bytes_reduced: int | None
-    creation_tokens: int | None
-    maintenance_tokens: int | None
+    measured_agent_tokens: int | None = None
+    estimated_operational_savings: int | None = None
+    estimated_net_savings: int | None = None
+    estimated_context_reference_tokens: int | None = None
+    context_bytes_reduced: int | None = None
+    creation_tokens: int | None = None
+    maintenance_tokens: int | None = None
     quality: Literal["unmeasured", "partial", "preliminary"]
     issues: tuple[str, ...]
-    latest_observation_at: str | None
+    latest_observation_at: str | None = None
     comparison: Literal["recorded_manual_tasks"] = "recorded_manual_tasks"
 
 

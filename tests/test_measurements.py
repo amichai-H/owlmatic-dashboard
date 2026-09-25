@@ -70,3 +70,33 @@ def test_v1_database_migration_preserves_snapshot_and_has_unknown_receipt(tmp_pa
 def test_v2_contract_is_published() -> None:
     path = Path(__file__).resolve().parents[1] / "contracts/statistics-snapshot-v2.schema.json"
     assert json.loads(path.read_text()) == StatisticsSnapshotV2.model_json_schema()
+
+
+def test_detailed_unknown_measurements_survive_omitted_null_fields(tmp_path: Path) -> None:
+    from owlmatic_dashboard.measurement_wire import Assessment, MeasurementMetrics
+    from owlmatic_dashboard.wire import ExportScope
+
+    value = measurement_snapshot()
+    data = value.model_dump()
+    data["shared"] = ExportScope(workflow_identifiers=True)
+    data["workflows"] = ()
+    data["measurements"] = MeasurementMetrics(
+        observed_tasks=1,
+        measured_tasks=1,
+        unattributed_tasks=0,
+        workflows=(
+            Assessment(
+                workflow_ref="lab/test@hash",
+                observed_tasks=1,
+                measured_tasks=1,
+                baseline_samples=1,
+                quality="preliminary",
+                issues=(),
+            ),
+        ),
+    )
+    detailed = StatisticsSnapshotV2.model_validate(data)
+    assert StatisticsSnapshotV2.model_validate_json(detailed.model_dump_json(exclude_none=True)) == detailed
+    store = SqliteSnapshots(tmp_path)
+    store.accept(detailed)
+    assert store.page(None, 100).sources[0] == detailed

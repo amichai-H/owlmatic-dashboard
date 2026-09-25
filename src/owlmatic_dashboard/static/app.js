@@ -30,7 +30,7 @@ function render() {
     ["Measured execution tokens", number(measurement.measured_agent_tokens), `${measurement.measured_tasks} of ${measurement.observed_tasks} attributed tasks measured; ${measurement.unattributed_tasks} unattributed`],
     ["Estimated context reduction", number(measurement.estimated_context_reference_tokens), `Reference tokens, first exposure only. Bytes reduced: ${number(measurement.context_bytes_reduced)}`],
     ["Estimated operational savings", number(measurement.estimated_operational_savings), "Compared with compatible recorded manual tasks; can be negative"],
-    ["Estimated net savings", number(measurement.estimated_net_savings), "Includes creation and maintenance only when coverage is declared complete"]
+    ["Estimated net savings", number(measurement.estimated_net_savings), measurement.estimated_net_savings == null ? "Unknown: complete comparison and creation/maintenance coverage are required" : "After recorded creation and maintenance costs"]
   ] : [["Agent measurements", "—", "Not shared or not collected; workflow runtime does not establish token savings"]];
   element("measurement").replaceChildren(...measureCards.map(([title, value, note]) => { const card = node("article", null, "card"); card.append(node("h2", title), node("strong", value), node("p", note)); return card; }));
   element("measurement-window").textContent = measurement ? `Retained imported tasks (separate from the calendar window below) · latest observation ${measurement.latest_observation_at || "unknown"}. Historical comparison, not a guaranteed minimum.` : "Enable local measurement and explicitly share it in a v2 export.";

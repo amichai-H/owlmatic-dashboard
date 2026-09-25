@@ -74,6 +74,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Measured Agent Tokens"
         },
         "estimated_operational_savings": {
@@ -85,6 +86,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Estimated Operational Savings"
         },
         "estimated_net_savings": {
@@ -96,6 +98,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Estimated Net Savings"
         },
         "estimated_context_reference_tokens": {
@@ -107,6 +110,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Estimated Context Reference Tokens"
         },
         "context_bytes_reduced": {
@@ -118,6 +122,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Context Bytes Reduced"
         },
         "creation_tokens": {
@@ -129,6 +134,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Creation Tokens"
         },
         "maintenance_tokens": {
@@ -140,6 +146,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Maintenance Tokens"
         },
         "quality": {
@@ -167,6 +174,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Latest Observation At"
         },
         "comparison": {
@@ -181,16 +189,8 @@
         "observed_tasks",
         "measured_tasks",
         "baseline_samples",
-        "measured_agent_tokens",
-        "estimated_operational_savings",
-        "estimated_net_savings",
-        "estimated_context_reference_tokens",
-        "context_bytes_reduced",
-        "creation_tokens",
-        "maintenance_tokens",
         "quality",
-        "issues",
-        "latest_observation_at"
+        "issues"
       ],
       "title": "Assessment",
       "type": "object"

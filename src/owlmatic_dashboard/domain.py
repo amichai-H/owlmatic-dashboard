@@ -12,7 +12,7 @@ class Receipt(Contract):
 
 class SourceReceipt(Contract):
     source_id: str
-    received_at: str | None
+    received_at: str | None = None
 
 
 class SourcePage(Contract):
