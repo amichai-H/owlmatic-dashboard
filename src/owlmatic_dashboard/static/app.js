@@ -1,0 +1,66 @@
+"use strict";
+const element = (id) => document.getElementById(id);
+let token = "", sources = [], cursor = null, requestVersion = 0;
+const number = (value) => value == null ? "—" : value.toLocaleString();
+function node(tag, text, className) {
+  const result = document.createElement(tag);
+  if (text != null) result.textContent = text;
+  if (className) result.className = className;
+  return result;
+}
+function table(target, headings, rows) {
+  target.replaceChildren();
+  if (!rows.length) { target.append(node("p", "No data shared for this breakdown.", "muted")); return; }
+  const result = node("table"), head = node("thead"), row = node("tr"), body = node("tbody");
+  for (const heading of headings) row.append(node("th", heading));
+  head.append(row);
+  for (const values of rows) { const tr = node("tr"); for (const value of values) tr.append(node("td", value)); body.append(tr); }
+  result.append(head, body); target.append(result);
+}
+function render() {
+  const snapshot = sources.find((source) => source.source_id === element("source").value);
+  if (!snapshot) {
+    for (const id of ["metrics", "chart", "workflows", "days", "coverage", "window"]) element(id).replaceChildren();
+    return;
+  }
+  const usage = snapshot.usage, savings = snapshot.savings;
+  element("window").textContent = `${snapshot.days} UTC calendar days · generated ${snapshot.generated_at} · sequence ${snapshot.sequence} · retained local runs`;
+  const metrics = [
+    ["Estimated net tokens saved", number(savings?.net_tokens_saved), savings ? "After setup and failed attempts" : "Savings not shared or not configured"],
+    ["Workflow executions", number(usage.runs), `${usage.running} running · ${usage.execution_errors} execution errors`],
+    ["Verified tasks", number(usage.verified), "Includes valid negative findings"],
+    ["Workflow runtime", `${(usage.duration_ms / 1000).toLocaleString()}s`, "Machine runtime, not time saved"]
+  ];
+  element("metrics").replaceChildren(...metrics.map(([title, value, note]) => { const card = node("article", null, "card"); card.append(node("h2", title), node("strong", value), node("p", note)); return card; }));
+  element("coverage").textContent = savings ? `${savings.modeled_runs} of ${usage.terminal} terminal executions have a savings baseline. Manual equivalent: ${number(savings.manual_tokens)} tokens; Owlmatic: ${number(savings.owlmatic_tokens)}; setup: ${number(savings.setup_tokens)}.` : "The sender has not shared savings estimates.";
+  table(element("workflows"), ["Workflow", "Runs", "Verified", "Execution errors", "Est. net tokens"], (snapshot.workflows || []).map(w => [w.ref, number(w.usage.runs), number(w.usage.verified), number(w.usage.execution_errors), number(w.savings?.net_tokens_saved)]));
+  const daily = snapshot.daily || [];
+  table(element("days"), ["Date (UTC)", "Runs", "Verified", "Est. tokens before setup"], daily.map(d => [d.day, number(d.runs), number(d.verified), number(d.estimated_tokens_saved_before_setup)]));
+  element("chart").replaceChildren();
+  const max = Math.max(1, ...daily.map(d => d.runs));
+  for (const day of daily) { const bar = node("div", null, "bar"); bar.style.height = `${Math.max(1, day.runs / max * 100)}%`; bar.title = `${day.day}: ${day.runs} runs`; bar.setAttribute("role", "img"); bar.setAttribute("aria-label", bar.title); element("chart").append(bar); }
+  if (!daily.length) element("chart").append(node("p", "Daily activity was not shared.", "muted"));
+}
+async function load(append = false) {
+  const version = ++requestVersion, selected = element("source").value;
+  element("status").textContent = "Loading metrics…";
+  try {
+    const response = await fetch(`/api/v1/sources${append && cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, {headers: {Authorization: `Bearer ${token}`}, cache: "no-store"});
+    if (!response.ok) throw new Error(response.status === 401 ? "Read token rejected. Disconnect and try a valid read token." : "Could not load metrics. Check the receiver.");
+    const data = await response.json();
+    if (version !== requestVersion) return;
+    const merged = new Map((append ? sources : []).map(source => [source.source_id, source]));
+    for (const source of data.sources) merged.set(source.source_id, source);
+    sources = [...merged.values()]; cursor = data.next_cursor || null;
+    element("source").replaceChildren(...sources.map(source => { const option = node("option", source.source_id); option.value = source.source_id; return option; }));
+    if (sources.some(source => source.source_id === selected)) element("source").value = selected;
+    element("login").hidden = true; element("dashboard").hidden = false; element("more").hidden = !cursor;
+    element("status").textContent = sources.length ? `${sources.length} sources loaded. Select one to inspect its latest snapshot.` : "Connected. No snapshots received yet. Configure Owlmatic, then run owlmatic export push.";
+    render();
+  } catch (error) { if (version === requestVersion) element("status").textContent = error.message; }
+}
+element("connect").addEventListener("submit", event => { event.preventDefault(); token = element("token").value; element("token").value = ""; load(); });
+element("source").addEventListener("change", render);
+element("refresh").addEventListener("click", () => load());
+element("more").addEventListener("click", () => load(true));
+element("disconnect").addEventListener("click", () => { requestVersion++; token = ""; sources = []; cursor = null; element("dashboard").hidden = true; element("login").hidden = false; element("metrics").replaceChildren(); element("chart").replaceChildren(); element("workflows").replaceChildren(); element("days").replaceChildren(); element("source").replaceChildren(); element("coverage").textContent = ""; element("window").textContent = ""; element("status").textContent = "Disconnected."; });

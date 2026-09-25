@@ -1,0 +1,6 @@
+version: 1
+host: 127.0.0.1
+port: 8765
+data_directory: .data
+ingest_token_env: OWLMATIC_DASHBOARD_INGEST_TOKEN
+read_token_env: OWLMATIC_DASHBOARD_READ_TOKEN

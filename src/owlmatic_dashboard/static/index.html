@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Owlmatic — Insights</title><link rel="stylesheet" href="/assets/app.css"><script src="/assets/app.js" defer></script></head>
+<body><header><div class="brand">◉ owlmatic <span>/ insights</span></div><span class="badge">Independent receiver · v1</span></header>
+<main><div class="hero"><p class="eyebrow">EXECUTABLE MEMORY / IMPACT</p><h1>Less rediscovery.<br><em>More work done.</em></h1><p>Usage you can inspect. Estimates you can question.</p></div>
+<section class="panel" id="login"><h2>Connect to your metrics</h2><p>Enter the dashboard read token. It stays in this page's memory and is cleared when you disconnect or reload.</p>
+<form id="connect"><label for="token">Read token</label><div class="actions"><input id="token" type="password" autocomplete="off" required minlength="24"><button type="submit">Connect</button></div></form></section>
+<p id="status" role="status" aria-live="polite">No data loaded.</p>
+<section id="dashboard" hidden><div class="toolbar"><label for="source">Reporting source</label><select id="source"></select><button id="refresh">Refresh</button><button id="more" hidden>Load more sources</button><button id="disconnect" class="secondary">Disconnect</button></div>
+<p id="window" class="muted"></p><div id="metrics" class="cards"></div>
+<section class="panel"><h2>Daily activity</h2><p class="muted">Workflow executions in the selected snapshot. Hover a bar for its exact count.</p><div id="chart" class="chart" aria-label="Daily workflow executions"></div><details><summary>Daily data</summary><div id="days" class="scroll"></div></details></section>
+<section class="panel"><h2>Workflow contribution</h2><div id="workflows" class="scroll"></div></section>
+<section class="panel"><h2>How to read this report</h2><p id="coverage"></p><p>Token savings are estimates, not provider billing. Runtime is measured execution time, not human time saved. Setup and failed attempts count against estimated savings.</p><p>Each source is shown separately. A new snapshot replaces that source's previous snapshot; overlapping reporting windows are never added together. Retention may remove local history.</p></section></section>
+<footer>Think once. Run automatically. <span>No third-party assets. No browser telemetry.</span></footer></main></body></html>
